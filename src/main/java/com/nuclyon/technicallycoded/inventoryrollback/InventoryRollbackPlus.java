@@ -124,7 +124,9 @@ public class InventoryRollbackPlus extends InventoryRollback {
                     new SaveInventory(player, LogType.FORCE, null, null)
                             .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
                 });
-            } finally {
+            } catch (Exception ignored) {
+
+            }finally {
                 backUpAllPlayers();
             }
         }, 20 * 60 * 10);
