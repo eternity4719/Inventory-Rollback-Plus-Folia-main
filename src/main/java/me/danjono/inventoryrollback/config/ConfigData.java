@@ -157,7 +157,7 @@ public class ConfigData {
         setMaxSavesWorldChange((int) getDefaultValue("max-saves.world-change", 10));	
         setMaxSavesForce((int) getDefaultValue("max-saves.force", 10));
 
-        setTimeZone((String) getDefaultValue("time-zone", "GMT"));
+        setTimeZone((String) getDefaultValue("time-zone", "SYSTEM"));
         setTimeFormat((String) getDefaultValue("time-format", "dd/MM/yyyy HH:mm:ss a"));
 
         setUpdateChecker((boolean) getDefaultValue("update-checker", true));
@@ -288,6 +288,14 @@ public class ConfigData {
 
     public static void setTimeZone(String zone) {
         try {
+            // Follow the server's system time zone
+            if (zone.equalsIgnoreCase("SYSTEM")) {
+                timeZone = TimeZone.getDefault();
+                timeZoneName = timeZone.getID();
+                timeZoneOffsetMillis = timeZone.getOffset(System.currentTimeMillis());
+                return;
+            }
+
             // Allow UTC offsets
             if (zone.length() > 3 && zone.startsWith("UTC")) {
                 zone = "GMT" + zone.substring(3);
