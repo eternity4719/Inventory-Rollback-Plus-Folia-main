@@ -377,6 +377,12 @@ public class ClickGUI implements Listener {
 
             //Clicked icon to overwrite player inventory with backup data
             else if (icon.getType().equals(Buttons.getRestoreAllInventoryIcon())) {
+                // Require shift+left-click to avoid accidentally overwriting the player's inventory
+                if (!(e.isShiftClick() && e.isLeftClick())) {
+                    staff.sendMessage(MessageData.getPluginPrefix() + "§eShift+左键点击此按钮才会覆盖背包，防止误触。");
+                    return;
+                }
+
                 // Perm check
                 if (!staff.hasPermission("inventoryrollbackplus.restore")) {
                     staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
@@ -796,6 +802,12 @@ public class ClickGUI implements Listener {
 
             //Clicked icon to overwrite player ender chest with backup data
             else if (icon.getType().equals(Buttons.getRestoreAllInventoryIcon())) {
+                // Require shift+left-click to avoid accidentally overwriting the player's ender chest
+                if (!(e.isShiftClick() && e.isLeftClick())) {
+                    staff.sendMessage(MessageData.getPluginPrefix() + "§eShift+左键点击此按钮才会覆盖末影箱，防止误触。");
+                    return;
+                }
+
                 // Perm check
                 if (!staff.hasPermission("inventoryrollbackplus.restore")) {
                     staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getNoPermission());
