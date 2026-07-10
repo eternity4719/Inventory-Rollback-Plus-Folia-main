@@ -634,6 +634,11 @@ public class Buttons {
         assert meta != null;
         meta.setDisplayName(MessageData.getMainInventoryRestoreButton());
 
+        // ponytail: hint hardcoded; move to MessageData if it needs to be configurable
+        List<String> lore = new ArrayList<>();
+        lore.add("§eShift+左键点击以覆盖，防止误触");
+        meta.setLore(lore);
+
         item.setItemMeta(meta);
 
         CustomDataItemEditor nbt = CustomDataItemEditor.editItem(item);
