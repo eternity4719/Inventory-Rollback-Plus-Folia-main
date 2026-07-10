@@ -63,13 +63,22 @@ public class Version1Serialization {
 
         try {
             dataInput = new BukkitObjectInputStream(inputStream);
-            stacks = new ItemStack[dataInput.readInt()];
+            int len = dataInput.readInt();
+            // Reject corrupt headers before allocating to avoid NegativeArraySizeException / OOM.
+            if (len < 0 || len > 100_000) throw new IOException("Invalid item count in serialized data: " + len);
+            stacks = new ItemStack[len];
         } catch (IOException e1) {
             e1.printStackTrace();
         }
 
-        if (stacks == null)
+        if (stacks == null) {
+            if (dataInput != null) {
+                try {
+                    dataInput.close();
+                } catch (IOException ignored) {}
+            }
             return new ItemStack[]{};
+        }
 
         for (int i = 0; i < stacks.length; i++) {
             try {

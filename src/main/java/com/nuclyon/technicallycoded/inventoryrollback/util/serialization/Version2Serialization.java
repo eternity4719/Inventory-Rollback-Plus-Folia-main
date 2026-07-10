@@ -11,6 +11,10 @@ public class Version2Serialization {
 
     public static final int ID = 2;
 
+    // Upper bounds to reject corrupt/garbage headers before allocating (prevents OOM / NegativeArraySizeException).
+    private static final int MAX_ITEMS = 100_000;
+    private static final int MAX_ITEM_BYTES = 16 * 1024 * 1024;
+
     public static DeserializationResult deserialize(String data) {
         try {
             byte[] b64decoded = Base64.getDecoder().decode(data);
@@ -24,11 +28,15 @@ public class Version2Serialization {
 
     public static DeserializationResult deserialize(InputStream bais) throws IOException {
         int itemCount = readInt(bais);
+        if (itemCount < 0 || itemCount > MAX_ITEMS)
+            throw new IOException("Invalid item count in serialized data: " + itemCount);
         ItemStack[] items = new ItemStack[itemCount];
 
         for (int i = 0; i < items.length; i++) {
             // Read the length of the serialized item
             int length = readInt(bais);
+            if (length < 0 || length > MAX_ITEM_BYTES)
+                throw new IOException("Invalid item length in serialized data: " + length);
 
             if (length == 0) {
                 items[i] = null;
@@ -37,8 +45,11 @@ public class Version2Serialization {
 
             // Read the serialized item
             byte[] serializedItem = new byte[length];
-            for (int j = 0; j < length; j++) {
-                serializedItem[j] = (byte) bais.read();
+            int read = 0;
+            while (read < length) {
+                int r = bais.read(serializedItem, read, length - read);
+                if (r == -1) throw new EOFException("Unexpected end of stream while reading item bytes");
+                read += r;
             }
 
             try {
@@ -119,7 +130,9 @@ public class Version2Serialization {
     private static int readInt(InputStream is) throws IOException {
         int result = 0;
         for (int i = 0; i < 4; i++) {
-            result |= (is.read() & 0xFF) << (i * 8);
+            int read = is.read();
+            if (read == -1) throw new EOFException("Unexpected end of stream while reading int");
+            result |= (read & 0xFF) << (i * 8);
         }
         return result;
     }

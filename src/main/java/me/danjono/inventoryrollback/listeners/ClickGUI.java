@@ -318,8 +318,10 @@ public class ClickGUI implements Listener {
                     ItemStack[] mainInventory = data.getMainInventory();
                     ItemStack[] extraItems = data.getArmour();
 
+                    if (mainInventory == null) mainInventory = new ItemStack[0];
+
                     if (extraItems == null || extraItems.length == 0) {
-                        int extraItemsLen = mainInventory.length - 36;
+                        int extraItemsLen = Math.max(0, mainInventory.length - 36);
                         extraItems = new ItemStack[extraItemsLen];
                         System.arraycopy(mainInventory, 36, extraItems, 0, extraItemsLen);
                     }
@@ -447,7 +449,12 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                String[] location = nbt.getString("location").split(",");			
+                String locationString = nbt.getString("location");
+                String[] location = locationString == null ? new String[0] : locationString.split(",");
+                if (location.length < 4) {
+                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationInvalidWorldError(locationString));
+                    return;
+                }
                 World world = Bukkit.getWorld(location[0]);
 
                 if (world == null) {
@@ -456,11 +463,17 @@ public class ClickGUI implements Listener {
                     return;
                 }
 
-                Location loc = new Location(world, 
-                        Math.floor(Double.parseDouble(location[1])), 
-                        Math.floor(Double.parseDouble(location[2])), 
-                        Math.floor(Double.parseDouble(location[3])))
-                        .add(0.5, 0.5, 0.5);				
+                Location loc;
+                try {
+                    loc = new Location(world,
+                            Math.floor(Double.parseDouble(location[1])),
+                            Math.floor(Double.parseDouble(location[2])),
+                            Math.floor(Double.parseDouble(location[3])))
+                            .add(0.5, 0.5, 0.5);
+                } catch (NumberFormatException ex) {
+                    staff.sendMessage(MessageData.getPluginPrefix() + MessageData.getDeathLocationInvalidWorldError(locationString));
+                    return;
+                }
 
                 // Teleport player on a slight delay to block the teleport icon glitching out into the player inventory
                 SchedulerUtils.runTaskLater(e.getWhoClicked().getLocation(), () -> {
@@ -518,10 +531,14 @@ public class ClickGUI implements Listener {
                 }
 
                 if (offlinePlayer.isOnline()) {
-                    Player player = (Player) offlinePlayer;	
+                    Player player = (Player) offlinePlayer;
                     double health = nbt.getDouble("health");
 
-                    player.setHealth(health);
+                    // Clamp to the player's current max health; a stored value above it (e.g. old health
+                    // boosts) or NaN would make setHealth throw and abort the rest of the handler.
+                    double maxHealth = player.getMaxHealth();
+                    double safeHealth = Double.isNaN(health) ? maxHealth : Math.max(0, Math.min(health, maxHealth));
+                    player.setHealth(safeHealth);
 
                     if (SoundData.isFoodRestoredEnabled())
                         player.playSound(player.getLocation(), SoundData.getFoodRestored(), 1, 1);

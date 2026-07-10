@@ -121,8 +121,11 @@ public class InventoryRollbackPlus extends InventoryRollback {
         SchedulerUtils.runTaskLaterAsynchronously(null, () -> {
             try {
                 Bukkit.getOnlinePlayers().forEach(player -> {
-                    new SaveInventory(player, LogType.FORCE, null, null)
-                            .snapshotAndSave(player.getInventory(), player.getEnderChest(), true);
+                    // On Folia the snapshot must be taken on the player's own region thread.
+                    // snapshotAndSave then hands the save off to the async scheduler internally.
+                    SchedulerUtils.runEntityTask(player, () ->
+                            new SaveInventory(player, LogType.FORCE, null, null)
+                                    .snapshotAndSave(player.getInventory(), player.getEnderChest(), true));
                 });
             } catch (Exception ignored) {
 

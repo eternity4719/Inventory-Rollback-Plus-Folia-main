@@ -29,7 +29,9 @@ public class Commands implements CommandExecutor, TabCompleter {
         this.subCommands.put("disable", new DisableSubCmd(mainIn));
         this.subCommands.put("reload", new ReloadSubCmd(mainIn));
         this.subCommands.put("version", new VersionSubCmd(mainIn));
-        this.subCommands.put("forcebackup", new ForceBackupSubCmd(mainIn));
+        ForceBackupSubCmd forceBackup = new ForceBackupSubCmd(mainIn);
+        this.subCommands.put("forcebackup", forceBackup);
+        this.subCommands.put("forcesave", forceBackup); // alias
         this.subCommands.put("import", new ImportSubCmd(mainIn));
         this.subCommands.put("help", new HelpSubCmd(mainIn));
     }
@@ -44,7 +46,7 @@ public class Commands implements CommandExecutor, TabCompleter {
                 ((HelpSubCmd) this.subCommands.get("help")).sendHelp(sender);
                 return true;
             }
-            IRPCommand irpCmd = this.subCommands.get(args[0]);
+            IRPCommand irpCmd = this.subCommands.get(args[0].toLowerCase());
             if (irpCmd != null) {
                 irpCmd.onCommand(sender, cmd, label, args);
                 return true;

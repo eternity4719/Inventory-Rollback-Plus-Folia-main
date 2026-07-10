@@ -1,11 +1,14 @@
 package com.nuclyon.technicallycoded.inventoryrollback.folia;
 
 import com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus;
+import io.papermc.paper.threadedregions.scheduler.AsyncScheduler;
 import io.papermc.paper.threadedregions.scheduler.GlobalRegionScheduler;
 import io.papermc.paper.threadedregions.scheduler.RegionScheduler;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -14,6 +17,8 @@ import java.lang.reflect.Method;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import static com.nuclyon.technicallycoded.inventoryrollback.InventoryRollbackPlus.usingFolia;
 
@@ -68,23 +73,14 @@ public abstract class SchedulerUtils {
         JavaPlugin plugin = InventoryRollbackPlus.getInstance();
         if (usingFolia) {
             try {
-                if (loc != null) {
-                    Method getRegionScheduler = plugin.getServer().getClass().getMethod("getRegionScheduler");
-                    RegionScheduler regionScheduler = (RegionScheduler) getRegionScheduler.invoke(plugin.getServer());
-                    regionScheduler.runDelayed(
-                            plugin,
-                            loc,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
+                // Folia's AsyncScheduler runs off the region tick threads. `loc` is irrelevant for
+                // async work and is intentionally ignored (kept in the signature for API parity).
+                Method getAsyncScheduler = plugin.getServer().getClass().getMethod("getAsyncScheduler");
+                AsyncScheduler asyncScheduler = (AsyncScheduler) getAsyncScheduler.invoke(plugin.getServer());
+                if (delay <= 0) {
+                    asyncScheduler.runNow(plugin, (ScheduledTask t) -> task.run());
                 } else {
-                    Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                    GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                    globalScheduler.runDelayed(
-                            plugin,
-                            (ScheduledTask scheduledTask) -> task.run(),
-                            delay
-                    );
+                    asyncScheduler.runDelayed(plugin, (ScheduledTask t) -> task.run(), delay * 50, TimeUnit.MILLISECONDS);
                 }
                 return;
             } catch (Exception e) {
@@ -145,19 +141,19 @@ public abstract class SchedulerUtils {
         JavaPlugin plugin = InventoryRollbackPlus.getInstance();
         if (usingFolia) {
             try {
-                Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                class AsyncRepeatingTask {
-                    private ScheduledTask task;
-                    void start(long initialDelay) {
-                        task = globalScheduler.runDelayed(plugin, (ScheduledTask t) -> {
-                            runnable.run();
-                            start(period);
-                        }, initialDelay);
-                        runnable.setScheduledTask(task);
-                    }
-                }
-                new AsyncRepeatingTask().start(delay);
+                Method getAsyncScheduler = plugin.getServer().getClass().getMethod("getAsyncScheduler");
+                AsyncScheduler asyncScheduler = (AsyncScheduler) getAsyncScheduler.invoke(plugin.getServer());
+                // AsyncScheduler requires a strictly positive initial delay and period.
+                long initialDelayMs = Math.max(1, delay) * 50;
+                long periodMs = Math.max(1, period) * 50;
+                ScheduledTask task = asyncScheduler.runAtFixedRate(
+                        plugin,
+                        (ScheduledTask t) -> runnable.run(),
+                        initialDelayMs,
+                        periodMs,
+                        TimeUnit.MILLISECONDS
+                );
+                runnable.setScheduledTask(task);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -174,15 +170,39 @@ public abstract class SchedulerUtils {
         JavaPlugin plugin = InventoryRollbackPlus.getInstance();
         if (usingFolia) {
             try {
-                Method getGlobalScheduler = plugin.getServer().getClass().getMethod("getGlobalRegionScheduler");
-                GlobalRegionScheduler globalScheduler = (GlobalRegionScheduler) getGlobalScheduler.invoke(plugin.getServer());
-                globalScheduler.execute(plugin, task);
+                Method getAsyncScheduler = plugin.getServer().getClass().getMethod("getAsyncScheduler");
+                AsyncScheduler asyncScheduler = (AsyncScheduler) getAsyncScheduler.invoke(plugin.getServer());
+                asyncScheduler.runNow(plugin, (ScheduledTask t) -> task.run());
                 return;
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, task);
+    }
+
+    /**
+     * Runs a task on the region thread that owns the given entity. On Folia, entity state
+     * (inventory, health, location) may only be touched from that entity's thread, so this must
+     * be used whenever a background task needs to read/modify a player.
+     * @param entity The entity whose region thread should run the task.
+     * @param task   The task to run.
+     */
+    public static void runEntityTask(@NotNull Entity entity, @NotNull Runnable task) {
+        JavaPlugin plugin = InventoryRollbackPlus.getInstance();
+        if (usingFolia) {
+            try {
+                Method getScheduler = entity.getClass().getMethod("getScheduler");
+                Object entityScheduler = getScheduler.invoke(entity);
+                Method run = entityScheduler.getClass().getMethod("run", Plugin.class, Consumer.class, Runnable.class);
+                Consumer<ScheduledTask> consumer = (ScheduledTask t) -> task.run();
+                run.invoke(entityScheduler, plugin, consumer, null);
+                return;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        plugin.getServer().getScheduler().runTask(plugin, task);
     }
 
     /**

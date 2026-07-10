@@ -20,10 +20,9 @@ public class Version3Serialization {
     public static DeserializationResult deserialize(String data) {
         try {
             byte[] b64decoded = Base64.getDecoder().decode(data);
-            ByteArrayInputStream bais = new ByteArrayInputStream(b64decoded);
-            GZIPInputStream gis = new GZIPInputStream(bais);
-
-            return Version2Serialization.deserialize(gis);
+            try (GZIPInputStream gis = new GZIPInputStream(new ByteArrayInputStream(b64decoded))) {
+                return Version2Serialization.deserialize(gis);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             return new DeserializationResult(null, "Failed to deserialize item stack: " + e.getMessage());
@@ -33,17 +32,14 @@ public class Version3Serialization {
     public static String serialize(ItemStack[] items) {
         try {
             byte[] serializedBytes = Version2Serialization.serializeBytes(items);
+            if (serializedBytes == null) return null;
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            GZIPOutputStream gos = new GZIPOutputStream(baos);
+            try (GZIPOutputStream gos = new GZIPOutputStream(baos)) {
+                gos.write(serializedBytes);
+            }
 
-            assert serializedBytes != null;
-            gos.write(serializedBytes);
-
-            gos.close();
-
-            byte[] compressedBytes = baos.toByteArray();
-            return Base64.getEncoder().encodeToString(compressedBytes);
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
         } catch (Exception e) {
             e.printStackTrace();
             return null;
